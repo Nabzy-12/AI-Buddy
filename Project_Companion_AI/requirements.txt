@@ -1,0 +1,7 @@
+# requirements.txt
+chainlit
+google-generativeai
+python-dotenv
+SpeechRecognition
+PyAudio # Required by SpeechRecognition for microphone input
+pyttsx3

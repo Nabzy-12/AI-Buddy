@@ -1,0 +1,20 @@
+# Secrets - DO NOT COMMIT
+.env
+
+# Python Virtual Environment
+venv/
+
+# Python cache files and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite Database file (contains conversation history, facts, insights)
+# Keep this local unless you explicitly want to share the AI's memory
+data/companion_ai.db
+
+# Chainlit specific files (optional but good practice)
+.chainlit/
+
+# IDE specific files (optional)
+.vscode/
