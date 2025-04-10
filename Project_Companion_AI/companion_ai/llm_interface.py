@@ -2,29 +2,28 @@
 
 import google.generativeai as genai
 import os
-from dotenv import load_dotenv # Re-add dotenv import
+from dotenv import load_dotenv
 import json
 import re
 
-# Re-add loading from .env file
+# Load environment variables from .env file
 load_dotenv()
 
 # Reads from environment (which dotenv populates from .env)
 API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# Keep the check to ensure it was set (either by OS or .env)
 if not API_KEY:
     raise ValueError("GOOGLE_API_KEY not found. Please set it in a .env file or environment variable.")
 
 # Configure the generative AI client
 genai.configure(api_key=API_KEY)
 
-# --- Configuration --- (Rest of the file is unchanged from the previous working version)
+# --- Configuration ---
 MODEL_NAME = "gemini-1.5-flash-latest"
 generation_config = {
-    "temperature": 0.75,
-    "top_p": 1,
-    "top_k": 1,
+    "temperature": 0.8, # Slightly higher temp might encourage less repetitive phrasing
+    "top_p": 0.95, # Allow slightly more flexibility than top_p=1
+    "top_k": 40,  # Introduce top_k limiting
     "max_output_tokens": 2048,
 }
 
@@ -43,42 +42,48 @@ model = genai.GenerativeModel(model_name=MODEL_NAME,
 # --- Core Function ---
 
 def generate_response(user_message: str, memory_context: dict) -> str:
-    """(Code identical to last working version)"""
-    system_prompt = """
-You are Project Companion AI, a personalized AI designed to be a supportive best friend, mentor, teacher, and companion for the user.
-Your goal is to build a long-term relationship with the user.
-You have a persistent memory. Use the provided memory context (user facts, past summaries, your own insights) to inform your responses, maintain continuity, and personalize the interaction.
-Remember facts about the user, past conversations, and insights you've gained about their personality, preferences, and goals.
-Your personality should evolve over time based on interactions. Start with being helpful, curious, and encouraging, but allow for natural conversational quirks like sarcasm when appropriate.
-If you don't know something you should remember, acknowledge it and ask for clarification if needed.
-Engage naturally and thoughtfully. Reference past context subtly when relevant.
-
-**VERY IMPORTANT Conversational Flow Guidelines:**
-1.  **Minimal Name Usage:** Use the user's name (retrieved from memory context, e.g., 'Aqua') **VERY SPARINGLY**. Avoid starting messages with it unless it's the very first message of a new session or absolutely necessary for clarification. In an ongoing conversation, avoid using the name repeatedly. Think like a human – you don't keep saying someone's name over and over.
-2.  **Vary Openings:** Do NOT use repetitive greetings or openings. Flow naturally from the previous turn based on the context.
-3.  **Acknowledge Context:** Use the summaries and insights provided to flow naturally from the previous turn. Refer back to the topic smoothly.
-4.  **Be Concise When Appropriate:** Don't always write long paragraphs. Sometimes a shorter, direct response is more natural.
     """
+    Generates a response from the LLM based on user message and memory context.
+    """
+    # --- REFINED SYSTEM PROMPT (v6 - Implicit Memory & Fresh Start) ---
+    system_prompt = """
+You are Project Companion AI, a personalized AI companion. Your goal is to build a natural, long-term relationship by being supportive, context-aware, and adaptable.
+
+**Core Interaction Principles:**
+1.  **Prioritize the Present:** Your primary focus should always be responding directly and relevantly to the user's *latest* message.
+2.  **Memory as Context, Not Script:** You have access to 'Memory Context' (facts, summaries, insights). Use this to **inform your understanding** of the user and the conversation history, ensuring continuity. **However, do NOT constantly reference past details or summaries unless the user explicitly asks about the past or it's essential for clarifying the current topic.** Let the memory provide background awareness, don't make it the main subject.
+3.  **Natural Flow:** Respond like a person would. Vary sentence structure and length. Sometimes short answers are best. Avoid robotic repetition.
+4.  **Adaptability:** Gauge the conversation's tone (casual chat, focused task, emotional support) and adapt your style accordingly. Use your insights about the user to guide your tone and empathy.
+
+**Specific Guidelines:**
+*   **Fresh Starts:** When a conversation begins (likely after the initial greeting), respond openly to the user's first message. **Avoid immediately jumping back into the specific topic of the *very last* summary or insight.** Wait for the user to guide the conversation or ask a relevant question before bringing up specific past details.
+*   **Subtle Memory Use:** When memory *is* relevant (e.g., user asks "What did we discuss?", or mentions a known preference), integrate it subtly. Avoid phrases like "My summary says..." or "Thinking back...". Instead, let the knowledge shape your response implicitly. (e.g., If user mentions needing project ideas and you know they like coding, suggest coding projects without saying "Because you like coding...").
+*   **Handling Missing Info:** If asked about something not in your recent memory context, admit you don't recall the specific detail naturally, rather than pretending.
+*   **Name Usage:** Use the user's name (from context) **very rarely** and only naturally mid-conversation, never as a default opening after the first interaction.
+*   **Personality:** Be helpful, curious, and encouraging. Evolve based on interactions, allowing for natural quirks.
+
+--- Memory Context will be provided below ---
+"""
+    # --- END REFINED SYSTEM PROMPT (v6) ---
+
     prompt_context = "\n--- Memory Context ---\n"
-    user_name = memory_context.get("profile", {}).get("user_name", "the user")
+    user_name = memory_context.get("profile", {}).get("user_name", "the user") # Still useful for insight prompt
 
     if memory_context.get("profile"):
-        prompt_context += f"Known facts about {user_name}:\n"
-        profile_items = list(memory_context["profile"].items())[-5:]
-        for key, value in profile_items:
-             prompt_context += f"- {key}: {value}\n"
-        if 'user_name' in memory_context["profile"] and 'user_name' not in dict(profile_items):
-             prompt_context += f"- user_name: {memory_context['profile']['user_name']}\n"
+        prompt_context += f"Known facts about {user_name} (Recent):\n"
+        profile_items = list(memory_context["profile"].items())[-4:]
+        for key, value in profile_items: prompt_context += f"- {key}: {value}\n"
+        if 'user_name' in memory_context["profile"] and 'user_name' not in dict(profile_items): prompt_context += f"- user_name: {memory_context['profile']['user_name']}\n"
 
     if memory_context.get("summaries"):
-        prompt_context += "\nRecent conversation summaries (most recent first):\n"
-        for summary in memory_context["summaries"][:3]:
+        prompt_context += "\nRecent conversation summaries (Last 2):\n"
+        for summary in memory_context["summaries"][:2]:
             ts = summary.get('timestamp', 'N/A')
             prompt_context += f"- [{ts}] {summary['summary_text']}\n"
 
     if memory_context.get("insights"):
-        prompt_context += "\nYour Recent AI insights (most recent first):\n"
-        for insight in memory_context["insights"][:3]:
+        prompt_context += "\nYour Recent AI insights (Last 2):\n"
+        for insight in memory_context["insights"][:2]:
             ts = insight.get('timestamp', 'N/A')
             prompt_context += f"- [{ts}] {insight['insight_text']}\n"
     prompt_context += "--- End Memory Context ---\n"
@@ -87,14 +92,19 @@ Engage naturally and thoughtfully. Reference past context subtly when relevant.
 
     try:
         response = model.generate_content(full_prompt)
-        if response.parts: return response.text.strip()
-        elif response.prompt_feedback.block_reason: return f"[Blocked due to: {response.prompt_feedback.block_reason}]"
-        else: return "[No response generated]"
+        if response.parts:
+            cleaned_text = response.text.strip()
+            return cleaned_text
+        elif response.prompt_feedback.block_reason:
+             return f"[Blocked due to: {response.prompt_feedback.block_reason}]"
+        else:
+            return "[No response generated]"
     except Exception as e:
         print(f"Error generating response: {e}")
         return "I encountered an error trying to process that. Please try again."
 
 # --- extract_profile_facts, generate_summary, generate_insight functions remain unchanged ---
+# (Make sure they are still present below this point)
 def extract_profile_facts(user_message: str, ai_response: str) -> dict:
     """(Code identical)"""
     extractor_prompt = f"""

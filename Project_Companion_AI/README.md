@@ -2,15 +2,22 @@
 
 A personalized conversational AI designed to function as a supportive companion, mentor, and friend. Built using Python, Chainlit, Google Gemini, and SQLite.
 
-## Current Status (Initial Setup - April 10, 2025)
+## Current Status (Updated - April 10, 2025)
 
 *   **Core Structure:** Project structure established with Python.
 *   **UI:** Basic chat interface implemented using Chainlit.
 *   **LLM:** Connected to the Google Gemini API (specifically `gemini-1.5-flash-latest`) for language understanding and generation.
-*   **Memory:** Initial persistent memory system implemented using SQLite.
+*   **Memory:** Persistent memory system implemented using SQLite.
     *   Database schema includes tables for `user_profile`, `conversation_summaries`, and `ai_insights`.
-    *   **Implemented Feature:** Basic extraction and storage of user profile facts (e.g., `user_name`) from conversations. The AI can recall these facts across sessions.
-*   **Interaction:** Basic request-response loop functioning.
+    *   Implemented saving & retrieval for all three memory types:
+        *   **User Profile Facts:** Extracts and stores key facts about the user.
+        *   **Conversation Summaries:** Generates and stores summaries of interaction turns.
+        *   **AI Insights:** Generates and stores AI's reflective insights on the conversation/user.
+*   **Interaction:** Basic text-based request-response loop functioning.
+*   **Prompt Engineering:** System prompt refined iteratively to encourage more natural conversation, better context awareness, subtle memory usage, and reduced repetition.
+*   **API Key Handling:** Uses `.env` file (ignored by Git) for API key management via `python-dotenv`.
+
+*(Note: STT/TTS functionality was attempted but paused due to framework issues)*.
 
 ## Goals (from Briefing Document)
 
