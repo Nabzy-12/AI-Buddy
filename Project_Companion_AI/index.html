@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Companion AI - Voice Input</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        #controls button { padding: 10px 15px; margin: 5px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; }
+        #startButton { background-color: #4CAF50; color: white; }
+        #stopButton { background-color: #f44336; color: white; }
+        #status { margin-top: 20px; padding: 10px; background-color: #fff; border: 1px solid #ddd; border-radius: 5px;}
+        .recording { animation: blinker 1.5s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body>
+    <h1>Project Companion AI - Voice Input Test</h1>
+    <div id="controls">
+        <button id="startButton">Start Recording</button>
+        <button id="stopButton" disabled>Stop Recording</button>
+    </div>
+    <div id="status">
+        <p>Status: Not connected. Click "Start Recording" to begin.</p>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const statusDiv = document.getElementById('status').querySelector('p');
+
+        let websocket;
+        let mediaRecorder;
+        let audioChunks = [];
+        const audioMimeType = 'audio/webm;codecs=opus'; 
+
+        function updateStatus(message, isRecording = false) {
+            statusDiv.textContent = `Status: ${message}`;
+            if (isRecording) {
+                statusDiv.classList.add('recording');
+            } else {
+                statusDiv.classList.remove('recording');
+            }
+            console.log(`Status update: ${message}`);
+        }
+
+        async function startRecording() {
+            updateStatus('Attempting to connect to backend and start microphone...');
+            startButton.disabled = true;
+
+            websocket = new WebSocket('ws://localhost:8000/ws/audio');
+
+            websocket.onopen = async () => {
+                updateStatus('Connected to backend. Requesting microphone access...');
+                console.log('Frontend: WebSocket connection opened.'); // Added for clarity
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: audioMimeType });
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                                websocket.send(event.data); 
+                                console.log(`Sent audio chunk: ${event.data.size} bytes`);
+                            }
+                        }
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        updateStatus('Recording stopped. Processing finished.');
+                        console.log('Frontend: MediaRecorder stopped.'); // Added for clarity
+                        stream.getTracks().forEach(track => track.stop()); 
+                        
+                        startButton.disabled = false;
+                        stopButton.disabled = true;
+                        audioChunks = []; 
+                    };
+
+                    mediaRecorder.start(1000); 
+                    updateStatus('Recording started. Speak now!', true);
+                    stopButton.disabled = false;
+
+                } catch (err) {
+                    console.error('Error accessing microphone or starting MediaRecorder:', err);
+                    updateStatus(`Error: ${err.message}. Ensure microphone is allowed.`);
+                    startButton.disabled = false;
+                    if (websocket) websocket.close();
+                }
+            };
+
+            websocket.onmessage = (event) => {
+                console.log('Message from server: ', event.data);
+                updateStatus(`Server: ${event.data}`);
+            };
+
+            websocket.onerror = (error) => {
+                console.error('WebSocket Error:', error);
+                updateStatus('WebSocket error. Check backend server and console.');
+                startButton.disabled = false;
+                stopButton.disabled = true;
+            };
+
+            websocket.onclose = (event) => {
+                updateStatus(`Disconnected from backend. Code: ${event.code}, Clean: ${event.wasClean}`);
+                console.log('WebSocket connection closed:', event);
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                }
+            };
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop(); 
+                updateStatus('Stopping recording...');
+            }
+        }
+
+        startButton.addEventListener('click', startRecording);
+        stopButton.addEventListener('click', stopRecording);
+
+    </script>
+</body>
+</html>
