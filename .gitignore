@@ -1,36 +1,26 @@
 # --- Secrets & Environment Variables ---
-# Never commit your API keys or other secrets.
 .env
 
 # --- Python Virtual Environment ---
-# This folder contains all the installed libraries and can be very large.
-# It should always be generated locally based on requirements.txt.
 .venv/
 
 # --- Python Cache & Compiled Files ---
-# These are generated automatically by Python and should not be version controlled.
 **/__pycache__/
 *.py[cod]
 *.py$class
 
 # --- SQLite Database ---
-# Contains your personal conversation history. Keep this local.
-# The 'data/' directory itself can be tracked if it contains other assets
-# (like voice samples), but the database file should be ignored.
 data/companion_ai.db
 
 # --- IDE & Editor Specific Files ---
-# These files are specific to your local editor setup.
 .vscode/
 .idea/
 
 # --- Build & Distribution Artifacts ---
-# Common folders created when building Python packages.
 build/
 dist/
 *.egg-info/
 
 # --- Temporary Audio Files ---
-# We will be generating temporary audio files; they should not be committed.
 *.wav
 *.mp3
